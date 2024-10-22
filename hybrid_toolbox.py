@@ -1037,7 +1037,7 @@ class HybridToolboxGUI(QtWidgets.QMainWindow):
             cmds.select(allAnimCurves)
         else:
             cmds.select(allAnimCurves, add=True)
-    #Feature request - select anim curves within selected group
+    # Feature request - select anim curves within selected group 
 
     def selectAllJointRoots(self):
         if not self.addToSelectionChoice:
