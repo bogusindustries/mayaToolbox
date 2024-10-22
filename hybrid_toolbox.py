@@ -1,13 +1,18 @@
 # Hybrid Toolbox
 # Compatible with Maya 2022.5
 # Designed/Written by John Zilka
-# Last edited 10-10-2024
+# Last edited 10-22-2024
 
-import maya.cmds as cmds
-from PySide2 import QtGui, QtWidgets, QtCore
-from maya.OpenMayaUI import MQtUtil
-from shiboken2 import wrapInstance
+try:
+    from PySide2 import QtGui, QtWidgets, QtCore
+    from shiboken2 import wrapInstance
+except:
+    from PySide6 import QtGui, QtWidgets, QtCore
+    from shiboken6 import wrapInstance
+
 import sys
+from maya.OpenMayaUI import MQtUtil
+import maya.cmds as cmds
 
 class HybridToolboxGUI(QtWidgets.QMainWindow):
     def __init__(self, windowName, parent = None):
@@ -1002,10 +1007,6 @@ class HybridToolboxGUI(QtWidgets.QMainWindow):
         self.selectFeedbackOutput.setText(f"{number} VRay Lights in scene.")
 
     def selectAllLights(self):
-        #self.selectAllMayaLights()
-        #self.selectAllRedshiftLights()
-        #self.selectAllVRayLights()
-        #everyLight = self.selectLights(["light", "RedshiftPhysicalLight", "RedshiftDomeLight", "RedshiftIESLight", "RedshiftPortalLight","VRayLightRectShape", "VRayLightDomeShape", "VRayLightIESShape", "VRayLightSphereShape"])
 
         allLightTypes = [
             "light",                       # Maya lights
@@ -1027,7 +1028,6 @@ class HybridToolboxGUI(QtWidgets.QMainWindow):
         #totalLights = len(self.allMayaLights) + len(self.redshiftLightsSet) + len(self.vRayLightsSet)
         totalLights = str(len(everyLight))
         self.selectFeedbackOutput.setText(f"{totalLights} Lights in scene.")
-
 
     def selectAnimationCurves(self):
         allAnimCurves = cmds.ls(type="animCurve")
@@ -1116,8 +1116,6 @@ class HybridToolboxGUI(QtWidgets.QMainWindow):
             self.selectFeedbackOutput.setText(f"{number} BlendShape Nodes in scene.")
             print("Select an object to begin search.")
 
-        
-
     def selectAllLocators(self):
         if not self.addToSelectionChoice:
             cmds.select(clear=True)
@@ -1197,7 +1195,7 @@ class HybridToolboxGUI(QtWidgets.QMainWindow):
         if cleanup:
             cmds.delete(currentSelection)
 
-    # Creates a cluster at each CV oc selected curve
+    # Creates a cluster at each CV of selected curve
     def clusterAtCV(self):
         selectedTransforms = cmds.ls(selection=True, type="transform")
         selectedCurve = None
@@ -1515,7 +1513,6 @@ class HybridToolboxGUI(QtWidgets.QMainWindow):
             self.scaleConstraintChoice = "scale"
         else:
             self.scaleConstraintChoice = ""
-
 
     def setMaintainOffset(self):
         self.maintainOffsetChoice = self.constraintOffsetCheckbox.isChecked()
@@ -1974,7 +1971,7 @@ def getMayaMain():
     return wrapInstance(int(winPoint), QtWidgets.QWidget)
 
 def openWindow():
-    windowName = "Hybrid Toolbox v1.5.70"
+    windowName = "Hybrid Toolbox v1.5.71"
     checkWindow(windowName)
     HybridToolbox = HybridToolboxGUI(windowName, getMayaMain())
 
@@ -1983,6 +1980,3 @@ def openErrorWindow(message):
     errorMessage = message
     checkWindow(windowName)
     HybridtoolboxErrorWindow = HybridToolboxErrorGUI(windowName, errorMessage, getMayaMain())
-
-#test only
-#openWindow()
