@@ -131,10 +131,10 @@ Currently only tested in Maya 2022.5
 
 1. Download the latest Python file
 2. Place the script on your local drive
-   Windows : C:\Users\<YourUserName>\Documents\maya\scripts
-   macOS : /Users/<YourUserName>/Documents/maya/scripts
+   - Windows : C:\Users\YourUserName\Documents\maya\scripts
+   - macOS : /Users/YourUserName/Documents/maya/scripts
 3. Create a shelf button
-   Right-click on the shelf and choose New Shelf Button
+   - Right-click on the shelf and choose New Shelf Button
 4. Edit the shelf button command
    ```py
    import hybrid_toolbox
@@ -143,7 +143,7 @@ Currently only tested in Maya 2022.5
    hybrid_toolbox.openWindow()
    ```
 5. Name and Icon:
-   Give uour button a name and set an icon if you wish
+   - Give uour button a name and set an icon if you wish
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -207,7 +207,7 @@ License pending
 <!-- CONTACT -->
 ## Contact
 
-John Zilka - [@twitter_handle](https://x.com/bogusindustries) 
+Twitter or X for you youngins - [@bogusindustries](https://x.com/bogusindustries) 
 
 Project Link: [https://github.com/bogusindustries/mayaToolbox](https://github.com/bogusindustries/mayaToolbox)
 
