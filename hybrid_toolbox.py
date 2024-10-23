@@ -1,13 +1,18 @@
 # Hybrid Toolbox
 # Compatible with Maya 2022.5
 # Designed/Written by John Zilka
-# Last edited 10-10-2024
+# Last edited 10-23-2024
 
-import maya.cmds as cmds
-from PySide2 import QtGui, QtWidgets, QtCore
-from maya.OpenMayaUI import MQtUtil
-from shiboken2 import wrapInstance
+try:
+    from PySide2 import QtGui, QtWidgets, QtCore
+    from shiboken2 import wrapInstance
+except:
+    from PySide6 import QtGui, QtWidgets, QtCore
+    from shiboken6 import wrapInstance
+
 import sys
+from maya.OpenMayaUI import MQtUtil
+import maya.cmds as cmds
 
 class HybridToolboxGUI(QtWidgets.QMainWindow):
     def __init__(self, windowName, parent = None):
@@ -24,6 +29,7 @@ class HybridToolboxGUI(QtWidgets.QMainWindow):
         self.groupType = None
         self.customColorChoice = 0
         self.useCustomColorChoice = False
+        self.selectSearchCurrentChoice = False
         self.addToSelectionChoice = False
         self.objectCleanup = False
 
@@ -195,9 +201,12 @@ class HybridToolboxGUI(QtWidgets.QMainWindow):
     # Selection Tools GUI
     def selectionToolsCreateGUI(self):
     # Widgets
+        self.selectSearchCurrentCheckbox = QtWidgets.QCheckBox("Search Current Selection")
+        self.selectSearchCurrentCheckbox.setChecked(False)
+        self.selectSearchCurrentCheckbox.setStatusTip("When checked, selections are only applied to currently selected object and descendants.")
         self.selectAddToCheckbox = QtWidgets.QCheckBox("Add To Selection")
         self.selectAddToCheckbox.setStatusTip("Add to current selection.")
-        self.selectAddToCheckbox.setWhatsThis("When check, selections will be added to current selection.")
+        self.selectAddToCheckbox.setWhatsThis("When checked, selections will be added to current selection.")
         
         # Hierarchy Selections
         self.selectionHierarchyLabel = QtWidgets.QLabel("Hierarchy Selections")
@@ -239,6 +248,7 @@ class HybridToolboxGUI(QtWidgets.QMainWindow):
         self.selectionColumnWidth = 115
         # Selection Options Layout
         self.selectionOptionsLayout = QtWidgets.QHBoxLayout()
+        self.selectionOptionsLayout.addWidget(self.selectSearchCurrentCheckbox)
         self.selectionOptionsLayout.addWidget(self.selectAddToCheckbox)
 
         # Selection Hierarchy Layout
@@ -304,6 +314,7 @@ class HybridToolboxGUI(QtWidgets.QMainWindow):
         self.selectionToolsMainLayout.addRow("",self.selectionFeedbackLayout)
 
     # Connections
+        self.selectSearchCurrentCheckbox.stateChanged.connect(lambda: self.getSearchCurrent())
         self.selectAddToCheckbox.stateChanged.connect(lambda: self.getAddToSelection())
         self.selectHierarchyButton.clicked.connect(lambda: self.selectHierarchy())
         self.findRootButton.clicked.connect(lambda: self.findRoot())
@@ -881,6 +892,10 @@ class HybridToolboxGUI(QtWidgets.QMainWindow):
         cmds.select(clear=True)
     
     # Selection Tools Methods___________________________
+    def getSearchCurrent(self):
+        self.selectSearchCurrentChoice = self.selectSearchCurrentCheckbox.isChecked()
+        return self.selectSearchCurrentChoice
+    
     def getAddToSelection(self):
         self.addToSelectionChoice = self.selectAddToCheckbox.isChecked()
         return self.addToSelectionChoice
@@ -917,41 +932,157 @@ class HybridToolboxGUI(QtWidgets.QMainWindow):
             cmds.select(rootNode, add=True)
 
     def selectAllMeshes(self):
-        if not self.addToSelectionChoice:
-            cmds.select(clear=True)
-        allMeshes = cmds.ls(type="mesh")
-        if not allMeshes:
-            self.selectFeedbackOutput.setText("0 Meshes found.")
-        for m in allMeshes:
-            currentRelative = cmds.listRelatives(m, parent=True)
-            cmds.select(currentRelative, add=True)
-        number = str(len(allMeshes))
-        self.selectFeedbackOutput.setText(f"{number} Meshes in scene.")
+        # Helper function to select parents of meshes
+        def getMeshParents(meshes):
+            parents = []
+            for mesh in meshes:
+                parent = cmds.listRelatives(mesh, parent=True)
+                if parent:
+                    parents.append(parent[0])
+            return parents
+
+        # If 'selectSearchCurrentChoice' is False, select all meshes in the scene
+        if not self.selectSearchCurrentChoice:
+            if not self.addToSelectionChoice:
+                cmds.select(clear=True)
+
+            allMeshes = cmds.ls(type="mesh")
+            if not allMeshes:
+                self.selectFeedbackOutput.setText("0 Polygon Meshes found.")
+                return  # Early exit since there are no meshes
+
+            # Select all mesh parents in one go
+            parents = getMeshParents(allMeshes)
+            cmds.select(parents, add=True)
+            
+            number = len(parents)
+            self.selectFeedbackOutput.setText(f"{number} Polygon Meshes in scene.")
+        
+        # If 'selectSearchCurrentChoice' is True, search descendants of selected objects
+        else:
+            selection = cmds.ls(selection=True)
+            if not selection:
+                openErrorWindow("Select an object to search its descendants for Polygon Meshes")
+                return  # Early exit if nothing is selected
+
+            polySet = set()
+            for obj in selection:
+                descendants = cmds.listRelatives(obj, allDescendents=True, type="mesh")
+                if descendants:
+                    polySet.update(descendants)
+            
+            if not polySet:
+                self.selectFeedbackOutput.setText("No descendant Polygon Meshes found.")
+                return  # Early exit if no descendant meshes found
+
+            # Select all mesh parents in one go
+            parents = getMeshParents(polySet)
+            cmds.select(parents, replace=True)
+
+            if self.addToSelectionChoice:
+                cmds.select(selection, add=True)
+
+            number = len(parents)
+            self.selectFeedbackOutput.setText(f"{number} Meshes under selection.")
 
     def selectAllCurves(self):
-        if not self.addToSelectionChoice:
-            cmds.select(clear=True)
-        allCurves = cmds.ls(type="nurbsCurve")
-        if not allCurves:
-            self.selectFeedbackOutput.setText("0 Curves found.")
-        for c in allCurves:
-            currentRelative = cmds.listRelatives(c, parent=True)
-            cmds.select(currentRelative, add=True)
-        number = str(len(allCurves))
-        self.selectFeedbackOutput.setText(f"{number} Curves in scene.")
+        def getCurveParents(curves):
+            parents = []
+            for curve in curves:
+                parent = cmds.listRelatives(curve, parent=True)
+                if parent:
+                    parents.append(parent[0])
+            return parents
+        # If 'selectSearchCurrentChoice' is False, select all meshes in the scene
+        if not self.selectSearchCurrentChoice:
+            if not self.addToSelectionChoice:
+                cmds.select(clear=True)
+            
+            allCurves = cmds.ls(type = "nurbsCurve")
+            if not allCurves:
+                self.selectFeedbackOutput.setText("0 Curves found.")
+                return
+
+            parents = getCurveParents(allCurves)
+            cmds.select(parents, add=True)
+
+            number = len(parents)
+            self.selectFeedbackOutput.setText(f"{number} Curves in scene.")
+
+        # If 'selectSearchCurrentChoice' is True, search descendants of selected objects
+        else:
+            selection = cmds.ls(selection=True)
+            if not selection:
+                openErrorWindow("Select an object to search its descendants for Curves.")
+                return
+            curveSet = set()
+            for obj in selection:
+                descendants = cmds.listRelatives(obj, allDescendents = True, type="nurbsCurve")
+                if descendants:
+                    curveSet.update(descendants)
+            
+            if not curveSet:
+                self.selectFeedbackOutput.setText("No descendant Curves found.")
+                return
+            
+            parents = getCurveParents(curveSet)
+            cmds.select(parents, replace=True)
+
+            if self.addToSelectionChoice:
+                cmds.select(selection, add=True)
+
+            number = len(parents)
+            self.selectFeedbackOutput.setText(f"{number} Curves under selection.")
 
     def selectAllNurbsSurfaces(self):
-        if not self.addToSelectionChoice:
-            cmds.select(clear=True)
-        allNurbs = cmds.ls(type="nurbsSurface")
-        if not allNurbs:
-            self.selectFeedbackOutput.setText("0 NURBS Surfaces found.")
-        for n in allNurbs:
-            currentRelative = cmds.listRelatives(n, parent=True)
-            cmds.select(currentRelative, add=True)
-        number = str(len(allNurbs))
-        self.selectFeedbackOutput.setText(f"{number} Nurbs Surfaces in scene.")
+        def getCurveParents(curves):
+            parents = []
+            for curve in curves:
+                parent = cmds.listRelatives(curve, parent=True)
+                if parent:
+                    parents.append(parent[0])
+            return parents
+        # If 'selectSearchCurrentChoice' is False, select all meshes in the scene
+        if not self.selectSearchCurrentChoice:
+            if not self.addToSelectionChoice:
+                cmds.select(clear=True)
+            
+            allSurfaces = cmds.ls(type = "nurbsSurface")
+            if not allSurfaces:
+                self.selectFeedbackOutput.setText("0 NURBS found.")
+                return
 
+            parents = getCurveParents(allSurfaces)
+            cmds.select(parents, add=True)
+
+            number = len(parents)
+            self.selectFeedbackOutput.setText(f"{number} NURBS in scene.")
+
+        # If 'selectSearchCurrentChoice' is True, search descendants of selected objects
+        else:
+            selection = cmds.ls(selection=True)
+            if not selection:
+                openErrorWindow("Select an object to search its descendants for NURBS.")
+                return
+            nurbsSet = set()
+            for obj in selection:
+                descendants = cmds.listRelatives(obj, allDescendents = True, type="nurbsSurface")
+                if descendants:
+                    nurbsSet.update(descendants)
+            
+            if not nurbsSet:
+                self.selectFeedbackOutput.setText("No descendant NURBS found.")
+                return
+            
+            parents = getCurveParents(nurbsSet)
+            cmds.select(parents, replace=True)
+
+            if self.addToSelectionChoice:
+                cmds.select(selection, add=True)
+
+            number = len(parents)
+            self.selectFeedbackOutput.setText(f"{number} NURBS under selection.")
+        
     def selectLights(self, lightTypes):
         selectedLights = set()
         
@@ -962,16 +1093,16 @@ class HybridToolboxGUI(QtWidgets.QMainWindow):
         
         if not selectedLights:
             if any(light.startswith("light") for light in lightTypes):
-                print("No Maya Lights found")
+                self.selectFeedbackOutput.setText("No Maya Lights found")
 
             if any(light.startswith("Redshift") for light in lightTypes):
-                print("No Redshift lights found")
+                self.selectFeedbackOutput.setText("No Redshift Lights found")
 
             if any(light.startswith("VRay") for light in lightTypes):
-                print("No VRay lights found")
+                self.selectFeedbackOutput.setText("No VRay Lights found")
 
             if any(light.startswith("light") for light in lightTypes) and any(light.startswith("Redshift") for light in lightTypes) and any(light.startswith("VRay") for light in lightTypes):
-                print("No Lights found")
+                self.selectFeedbackOutput.setText("No Lights found")
             return set()
 
         if not self.addToSelectionChoice:
@@ -1002,21 +1133,17 @@ class HybridToolboxGUI(QtWidgets.QMainWindow):
         self.selectFeedbackOutput.setText(f"{number} VRay Lights in scene.")
 
     def selectAllLights(self):
-        #self.selectAllMayaLights()
-        #self.selectAllRedshiftLights()
-        #self.selectAllVRayLights()
-        #everyLight = self.selectLights(["light", "RedshiftPhysicalLight", "RedshiftDomeLight", "RedshiftIESLight", "RedshiftPortalLight","VRayLightRectShape", "VRayLightDomeShape", "VRayLightIESShape", "VRayLightSphereShape"])
 
         allLightTypes = [
-            "light",                       # Maya lights
-            "RedshiftPhysicalLight", 
+            "light",                    # Maya lights
+            "RedshiftPhysicalLight",    #Redshift lights
             "RedshiftDomeLight", 
             "RedshiftIESLight", 
-            "RedshiftPortalLight",          # Redshift lights
-            "VRayLightRectShape", 
+            "RedshiftPortalLight",          
+            "VRayLightRectShape",       #VRay lights
             "VRayLightDomeShape", 
             "VRayLightIESShape", 
-            "VRayLightSphereShape"          # VRay lights
+            "VRayLightSphereShape"          
         ]
 
         if not self.addToSelectionChoice:
@@ -1024,44 +1151,97 @@ class HybridToolboxGUI(QtWidgets.QMainWindow):
 
         everyLight = self.selectLights(allLightTypes)
 
-        #totalLights = len(self.allMayaLights) + len(self.redshiftLightsSet) + len(self.vRayLightsSet)
         totalLights = str(len(everyLight))
         self.selectFeedbackOutput.setText(f"{totalLights} Lights in scene.")
 
-
     def selectAnimationCurves(self):
-        allAnimCurves = cmds.ls(type="animCurve")
-        if not allAnimCurves:
-            self.selectFeedbackOutput.setText("No Animation found.")
-        if not self.addToSelectionChoice:
-            cmds.select(allAnimCurves)
+        if not self.selectSearchCurrentChoice: # Search entire scene
+            allAnimCurves = cmds.ls(type="animCurve")
+            if not allAnimCurves:
+                self.selectFeedbackOutput.setText("No Animation found.")
+            if not self.addToSelectionChoice:
+                cmds.select(allAnimCurves)
+            else:
+                cmds.select(allAnimCurves, add=True)
         else:
-            cmds.select(allAnimCurves, add=True)
+            selection = cmds.ls(selection=True)
+            # Initialize a set to hold the selection's  and descendents' anim curves
+            if not selection:
+                openErrorWindow("Select an object to search its descendents for animation")
+                return
+            
+            animCurvesSet = set()
+            
+            for obj in selection:
+                # make sure selected object is included
+                objAnim = cmds.listConnections(obj, type="animCurve")
+                if objAnim:
+                    animCurvesSet.update(objAnim)
+                
+                children = cmds.listRelatives(obj, allDescendents = True)
+                if children:
+                    for c in children:
+                        animCurve = cmds.listConnections(c, type="animCurve")
+                        if animCurve:
+                            animCurvesSet.update(animCurve)
+            cmds.select(animCurvesSet)
 
     def selectAllJointRoots(self):
-        if not self.addToSelectionChoice:
-            cmds.select(clear=True)
-        allJoints = cmds.ls(type="joint")
-        if not allJoints:
-            self.selectFeedbackOutput.setText("0 Joints found in scene.")
-        visitedJoints = set()
-        
-        for j in allJoints:
-            rootJoint = j
+        # If 'selectSearchCurrentChoice' is False, select all joint roots in the scene
+        if not self.selectSearchCurrentChoice:
+            if not self.addToSelectionChoice:
+                cmds.select(clear=True)
+            allJoints = cmds.ls(type="joint")
+            if not allJoints:
+                self.selectFeedbackOutput.setText("0 Joints found in scene.")
+            visitedJoints = set()
             
-            while True:
-                parentJoint = cmds.listRelatives(rootJoint, parent=True, type="joint")
-                if parentJoint:
-                    rootJoint = parentJoint[0]
-                else:
-                    break
-            
-            if rootJoint not in visitedJoints:
-                cmds.select(rootJoint, add=True)
-                visitedJoints.add(rootJoint)
+            for j in allJoints:
+                rootJoint = j
+                
+                while True:
+                    parentJoint = cmds.listRelatives(rootJoint, parent=True, type="joint")
+                    if parentJoint:
+                        rootJoint = parentJoint[0]
+                    else:
+                        break
+                
+                if rootJoint not in visitedJoints:
+                    cmds.select(rootJoint, add=True)
+                    visitedJoints.add(rootJoint)
 
-        number = str(len(visitedJoints))
-        self.selectFeedbackOutput.setText(f"{number} Joint Chains in scene.")
+            number = str(len(visitedJoints))
+            self.selectFeedbackOutput.setText(f"{number} Joint Chains in scene.")
+        # If 'selectSearchCurrentChoice' is True, search descendants of selected objects
+        else:
+            selection = cmds.ls(selection=True)
+            if not selection:
+                openErrorWindow("Select an object to search its descendants for Joints")
+                return
+            
+            jointSet = set()
+            for obj in selection:
+                descendants = cmds.listRelatives(obj, allDescendents=True, type="joint")
+                if descendants:
+                    jointSet.update(descendants)
+            if not jointSet:
+                self.selectFeedbackOutput.setText("No descendant Joints found.")
+                return
+            visitedJoints = set()
+            
+            for j in jointSet:
+                rootJoint = j
+                while True:
+                    parentJoint = cmds.listRelatives(rootJoint, parent=True, type="joint")
+                    if parentJoint:
+                        rootJoint = parentJoint[0]
+                    else:
+                        break
+                if rootJoint not in visitedJoints:
+                    cmds.select(rootJoint, add=True)
+                    visitedJoints.add(rootJoint)
+            number = str(len(visitedJoints))
+            self.selectFeedbackOutput.setText(f"{number} Joint Chains under selection.")
 
     def selectBlendshapeMeshes(self):
         currentSelection = cmds.ls(selection=True)
@@ -1116,41 +1296,133 @@ class HybridToolboxGUI(QtWidgets.QMainWindow):
             self.selectFeedbackOutput.setText(f"{number} BlendShape Nodes in scene.")
             print("Select an object to begin search.")
 
-        
-
     def selectAllLocators(self):
-        if not self.addToSelectionChoice:
-            cmds.select(clear=True)
-        allLocators = cmds.ls(type="locator")
-        if not allLocators:
-            self.selectFeedbackOutput.setText("0 Locators found.")
-        for l in allLocators:
-            currentRelative = cmds.listRelatives(l, parent=True)
-            cmds.select(currentRelative, add=True)
-        number = str(len(allLocators))
-        self.selectFeedbackOutput.setText(f"{number} Locators in scene.")
+        # Helper function to select parents of meshes
+        def getLocatorParents(locators):
+            parents = []
+            for loc in locators:
+                parent = cmds.listRelatives(loc, parent=True)
+                if parent:
+                    parents.append(parent[0])
+            return parents
+
+        # If 'selectSearchCurrentChoice' is False, select all meshes in the scene
+        if not self.selectSearchCurrentChoice:
+            if not self.addToSelectionChoice:
+                cmds.select(clear=True)
+
+            allLocators = cmds.ls(type="locator")
+            if not allLocators:
+                self.selectFeedbackOutput.setText("0 Locators found.")
+
+            # Select all mesh parents in one go
+            parents = getLocatorParents(allLocators)
+            cmds.select(parents, add=True)
+            
+            number = len(parents)
+            self.selectFeedbackOutput.setText(f"{number} Locators in scene.")
+        
+        # If 'selectSearchCurrentChoice' is True, search descendants of selected objects
+        else:
+            selection = cmds.ls(selection=True)
+            if not selection:
+                openErrorWindow("Select an object to search its descendants for Locators")
+                return  # Early exit if nothing is selected
+
+            locatorSet = set()
+            for obj in selection:
+                descendants = cmds.listRelatives(obj, allDescendents=True, type="locator")
+                if descendants:
+                    locatorSet.update(descendants)
+            
+            if not locatorSet:
+                self.selectFeedbackOutput.setText("No descendant Locators found.")
+
+            # Select all mesh parents in one go
+            parents = getLocatorParents(locatorSet)
+            cmds.select(parents, replace=True)
+
+            if self.addToSelectionChoice:
+                cmds.select(selection, add=True)
+
+            number = len(parents)
+            self.selectFeedbackOutput.setText(f"{number} Locators under selection.")
 
     def selectAllConstraints(self):
-        allConstraints = cmds.ls(type="constraint")
-        if not allConstraints:
-            self.selectFeedbackOutput.setText("0 Constraints found")
-        if not self.addToSelectionChoice:
-            cmds.select(allConstraints)
+        # If 'selectSearchCurrentChoice' is False, select all constraints in the scene
+        if not self.selectSearchCurrentChoice:
+            if not self.addToSelectionChoice:
+                cmds.select(clear=True)
+            allConstraints = cmds.ls(type="constraint")
+            if not allConstraints:
+                self.selectFeedbackOutput.setText("0 Constraints found")
+                return
+            if not self.addToSelectionChoice:
+                cmds.select(allConstraints)
+            else:
+                cmds.select(allConstraints, add=True)
+            number = str(len(allConstraints))
+            self.selectFeedbackOutput.setText(f"{number} Constraints in scene.")
         else:
-            cmds.select(allConstraints, add=True)
-        number = str(len(allConstraints))
-        self.selectFeedbackOutput.setText(f"{number} Constraints in scene.")
+            selection = cmds.ls(selection=True)
+            if not selection:
+                openErrorWindow("Select an object to search its descendants for Constraints")
+                return
+            
+            constraintSet = set()
+            for obj in selection:
+                descendants = cmds.listRelatives(obj, allDescendents=True, type="constraint")
+                if descendants:
+                    constraintSet.update(descendants)
+
+            if not constraintSet:
+                self.selectFeedbackOutput.setText("No descendant Constraints found.")
+                return
+
+            cmds.select(constraintSet, replace=True)
+            if self.addToSelectionChoice:
+                cmds.select(selection, add=True)
+            
+            number = len(constraintSet)
+            self.selectFeedbackOutput.setText(f"{number} Constraints under selection.")
     
     def selectAllIKHandles(self):
-        allIKHandles = cmds.ls(type="ikHandle")
-        if not allIKHandles:
-            self.selectFeedbackOutput.setText("0 IK Handles found.")
-        if not self.addToSelectionChoice:
-            cmds.select(allIKHandles)
+        # If 'selectSearchCurrentChoice' is False, select all IK Handles in the scene
+        if not self.selectSearchCurrentChoice:
+            if not self.addToSelectionChoice:
+                cmds.select(clear=True)
+            allIKHandles = cmds.ls(type="ikHandle")
+            if not allIKHandles:
+                self.selectFeedbackOutput.setText("0 IK Handles found")
+                return
+            if not self.addToSelectionChoice:
+                cmds.select(allIKHandles)
+            else:
+                cmds.select(allIKHandles, add=True)
+            number = str(len(allIKHandles))
+            self.selectFeedbackOutput.setText(f"{number} IK Handles in scene.")
         else:
-            cmds.select(allIKHandles, add=True)
-        number = str(len(allIKHandles))
-        self.selectFeedbackOutput.setText(f"{number} IK Handles in scene")
+            selection = cmds.ls(selection=True)
+            if not selection:
+                openErrorWindow("Select an object to search its descendants for IK Handles")
+                return
+            
+            ikHandleSet = set()
+            for obj in selection:
+                descendants = cmds.listRelatives(obj, allDescendents=True, type="ikHandle")
+                if descendants:
+                    ikHandleSet.update(descendants)
+
+            if not ikHandleSet:
+                self.selectFeedbackOutput.setText("No descendant IK Handles found.")
+                return
+
+            cmds.select(ikHandleSet, replace=True)
+            if self.addToSelectionChoice:
+                cmds.select(selection, add=True)
+            
+            number = len(ikHandleSet)
+            self.selectFeedbackOutput.setText(f"{number} IK Handles under selection.")
 
     # Curve Tools Methods______________
     def setCurveObjectCleanup(self):
@@ -1197,7 +1469,7 @@ class HybridToolboxGUI(QtWidgets.QMainWindow):
         if cleanup:
             cmds.delete(currentSelection)
 
-    # Creates a cluster at each CV oc selected curve
+    # Creates a cluster at each CV of selected curve
     def clusterAtCV(self):
         selectedTransforms = cmds.ls(selection=True, type="transform")
         selectedCurve = None
@@ -1515,7 +1787,6 @@ class HybridToolboxGUI(QtWidgets.QMainWindow):
             self.scaleConstraintChoice = "scale"
         else:
             self.scaleConstraintChoice = ""
-
 
     def setMaintainOffset(self):
         self.maintainOffsetChoice = self.constraintOffsetCheckbox.isChecked()
@@ -1974,7 +2245,7 @@ def getMayaMain():
     return wrapInstance(int(winPoint), QtWidgets.QWidget)
 
 def openWindow():
-    windowName = "Hybrid Toolbox v1.5.70"
+    windowName = "Hybrid Toolbox v1.5.71 Dev"
     checkWindow(windowName)
     HybridToolbox = HybridToolboxGUI(windowName, getMayaMain())
 
@@ -1983,6 +2254,3 @@ def openErrorWindow(message):
     errorMessage = message
     checkWindow(windowName)
     HybridtoolboxErrorWindow = HybridToolboxErrorGUI(windowName, errorMessage, getMayaMain())
-
-#test only
-#openWindow()
