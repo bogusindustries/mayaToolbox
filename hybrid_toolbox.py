@@ -2245,7 +2245,7 @@ def getMayaMain():
     return wrapInstance(int(winPoint), QtWidgets.QWidget)
 
 def openWindow():
-    windowName = "Hybrid Toolbox v1.5.71 Dev"
+    windowName = "Hybrid Toolbox v1.5.72"
     checkWindow(windowName)
     HybridToolbox = HybridToolboxGUI(windowName, getMayaMain())
 
