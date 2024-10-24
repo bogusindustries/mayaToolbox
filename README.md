@@ -143,7 +143,7 @@ Currently only tested in Maya 2022.5
    hybrid_toolbox.openWindow()
    ```
 5. Name and Icon:
-   - Give uour button a name and set an icon if you wish
+   - Give your button a name and set an icon if you wish
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -163,7 +163,7 @@ Add the toolbox to a shelf for easy access
 <!-- ROADMAP -->
 ## Roadmap
 
-- [ ] Search for animation within selected group
+- [x] Search for animation within selected group - included in v72!
 
 See the [open issues](https://github.com/bogusindustries/mayaToolbox/issues) for a full list of proposed features (and known issues).
 
