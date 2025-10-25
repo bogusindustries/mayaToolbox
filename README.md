@@ -132,7 +132,7 @@ Currently only tested in Maya 2022.5
 1. Download the latest Python file
 2. Place the script on your local drive
    - Windows : C:\Users\YourUserName\Documents\maya\scripts
-   - macOS : /Users/<YourUserName>/Library/Preferences/Autodesk/maya/<version>/scripts
+   - macOS : /Users/YourUserName/Library/Preferences/Autodesk/maya/version/scripts
 3. Create a shelf button
    - Right-click on the shelf and choose New Shelf Button
 4. Edit the shelf button command
